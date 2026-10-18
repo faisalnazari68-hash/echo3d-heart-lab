@@ -18,7 +18,8 @@ jobs:
           node-version: 22
       - name: Build debug APK from the live Echo-3D web app
         run: |
-          set -e
+          set -ex
+          sudo apt-get update -y && sudo apt-get install -y imagemagick
           SITE=https://echo3d-heart-lab.netlify.app
           mkdir -p app/www && cd app
           curl -fsSL $SITE/ -o www/index.html
