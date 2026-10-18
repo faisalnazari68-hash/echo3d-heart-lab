@@ -1,0 +1,48 @@
+name: Build Echo-3D Android APK
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build debug APK from the live Echo-3D web app
+        run: |
+          set -e
+          SITE=https://echo3d-heart-lab.netlify.app
+          mkdir -p app/www && cd app
+          curl -fsSL $SITE/ -o www/index.html
+          curl -fsSL $SITE/privacy.html -o www/privacy.html
+          curl -fsSL $SITE/icon-512.png -o icon-512.png
+          cat > capacitor.config.json <<'EOF'
+          {"appId":"com.premedfaze.echo3d","appName":"Echo-3D","webDir":"www","backgroundColor":"#0b0d12"}
+          EOF
+          npm init -y
+          npm i @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
+          npx cap add android
+          npx cap sync android
+          RES=android/app/src/main/res
+          rm -rf $RES/mipmap-anydpi-v26
+          for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            d=${pair%%:*}; s=${pair##*:}
+            convert icon-512.png -resize ${s}x${s} $RES/mipmap-$d/ic_launcher.png
+            cp $RES/mipmap-$d/ic_launcher.png $RES/mipmap-$d/ic_launcher_round.png
+            cp $RES/mipmap-$d/ic_launcher.png $RES/mipmap-$d/ic_launcher_foreground.png
+          done
+          cd android && ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk ../../Echo-3D.apk
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ github.run_number }}" Echo-3D.apk --repo "${{ github.repository }}" --title "Echo-3D for Android (v${{ github.run_number }})" --notes "Free Android install file. Educational use only; not medical advice." --latest
